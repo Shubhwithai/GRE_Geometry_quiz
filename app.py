@@ -1,12 +1,12 @@
 import streamlit as st
 from pydantic import BaseModel
-from mem0 import Memory
 from educhain import Educhain
 from langchain import LLMChain
 from openai import OpenAI
 import os
+from mem0 import Memory
 
-# Set up configuration
+# Configuration for Memory instance with Neo4j
 config = {
     "graph_store": {
         "provider": "neo4j",
@@ -19,9 +19,9 @@ config = {
     "version": "v1.1"
 }
 
-m = Memory.from_config(config_dict=config)
-
 # Initialize Memory, Educhain, and LLM instances
+m = Memory.from_config(config_dict=config)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 educhain = Educhain(api_key=OPENAI_API_KEY)
 llm = OpenAI(api_key=OPENAI_API_KEY)
 
