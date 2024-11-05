@@ -1,4 +1,3 @@
-
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -293,15 +292,16 @@ def main():
                     end_quiz(student_name)
 
     # Results Display
-    if not st.session_state.quiz_active and topic in st.session_state.progress_data:
+    if not st.session_state.quiz_active and st.session_state.progress_data:
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader(f"Latest Quiz Results for {student_name}")
-            analysis = st.session_state.progress_data[topic]
-            st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
-            st.metric("Level", analysis['level'])
-            st.write(f"**Reasoning:** {analysis['reasoning']}")
+            if st.session_state.current_topic in st.session_state.progress_data:
+                analysis = st.session_state.progress_data[st.session_state.current_topic]
+                st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
+                st.metric("Level", analysis['level'])
+                st.write(f"**Reasoning:** {analysis['reasoning']}")
 
         with col2:
             st.subheader("Progress Visualization")
