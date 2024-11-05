@@ -123,13 +123,11 @@ class GeometryQuizApp:
     def save_student_result(self, result: StudentQuizResult):
         filename = f"student_results/{result.student_name.lower().replace(' ', '_')}_results.json"
         
-        # Load existing results
         existing_results = []
         if os.path.exists(filename):
             with open(filename, 'r') as f:
                 existing_results = json.load(f)
         
-        # Add new result
         new_result = {
             "student_name": result.student_name,
             "timestamp": result.timestamp.isoformat(),
@@ -141,7 +139,6 @@ class GeometryQuizApp:
         }
         existing_results.append(new_result)
         
-        # Save updated results
         with open(filename, 'w') as f:
             json.dump(existing_results, f, indent=2)
 
@@ -152,33 +149,76 @@ class GeometryQuizApp:
                 return json.load(f)
         return []
 
-    def update_memory(self, user_id: str, topic: str, level: str):
-        self.memory.add(
-            f"Updated expertise level for {topic}: {level}",
-            user_id=user_id
-        )
-
-def main():
-    st.set_page_config(page_title="GRE Geometry Master", layout="wide")
-    
-    # Initialize the quiz app
+def initialize_session_state():
+    """Initialize all session state variables"""
     if 'quiz_app' not in st.session_state:
         st.session_state.quiz_app = GeometryQuizApp()
-    
-    # Initialize session state variables
     if 'current_question' not in st.session_state:
         st.session_state.current_question = 0
+    if 'questions' not in st.session_state:
+        st.session_state.questions = None
     if 'results' not in st.session_state:
         st.session_state.results = []
     if 'quiz_active' not in st.session_state:
         st.session_state.quiz_active = False
     if 'progress_data' not in st.session_state:
         st.session_state.progress_data = {}
+    if 'current_topic' not in st.session_state:
+        st.session_state.current_topic = None
+    if 'submitted_answer' not in st.session_state:
+        st.session_state.submitted_answer = False
+
+def start_quiz(topic: str, num_questions: int):
+    """Start a new quiz"""
+    st.session_state.quiz_active = True
+    st.session_state.current_question = 0
+    st.session_state.results = []
+    st.session_state.current_topic = topic
+    st.session_state.submitted_answer = False
     
-    # App title and description
+    current_level = st.session_state.progress_data.get(topic, {}).get('level', 'Beginner')
+    st.session_state.questions = st.session_state.quiz_app.generate_questions(
+        topic=topic,
+        level=current_level,
+        num_questions=num_questions
+    )
+
+def submit_answer():
+    """Handle answer submission"""
+    st.session_state.submitted_answer = True
+
+def next_question():
+    """Move to next question"""
+    st.session_state.current_question += 1
+    st.session_state.submitted_answer = False
+
+def end_quiz(student_name: str):
+    """End the quiz and save results"""
+    analysis = st.session_state.quiz_app.analyze_results(
+        st.session_state.results, 
+        st.session_state.current_topic
+    )
+    st.session_state.progress_data[st.session_state.current_topic] = analysis
+    
+    student_result = StudentQuizResult(
+        student_name=student_name,
+        timestamp=datetime.now(),
+        topic=st.session_state.current_topic,
+        accuracy=analysis['accuracy'],
+        level=analysis['level'],
+        correct_count=analysis['correct_count'],
+        total_count=analysis['total_count']
+    )
+    st.session_state.quiz_app.save_student_result(student_result)
+    st.session_state.quiz_active = False
+
+def main():
+    st.set_page_config(page_title="GRE Geometry Master", layout="wide")
+    
+    initialize_session_state()
+    
     st.title("🎯 GRE Geometry Master")
     
-    # Add student name input
     student_name = st.text_input("Enter Student Name", key="student_name")
     if not student_name:
         st.warning("Please enter your name to begin")
@@ -192,7 +232,7 @@ def main():
     - Triangles
     """)
 
-    # Sidebar for topic selection and quiz control
+    # Sidebar
     with st.sidebar:
         st.header("Quiz Controls")
         topic = st.selectbox("Select Topic", ["Lines and Angles", "Circles", "Triangles"])
@@ -208,70 +248,50 @@ def main():
         if not st.session_state.quiz_active:
             num_questions = st.slider("Number of Questions", 3, 10, 5)
             if st.button("Start Quiz"):
-                st.session_state.quiz_active = True
-                st.session_state.current_question = 0
-                st.session_state.results = []
-                
-                current_level = st.session_state.progress_data.get(topic, {}).get('level', 'Beginner')
-                
-                with st.spinner("Generating questions..."):
-                    st.session_state.current_questions = st.session_state.quiz_app.generate_questions(
-                        topic=topic,
-                        level=current_level,
-                        num_questions=num_questions
-                    )
-                st.rerun()
+                start_quiz(topic, num_questions)
 
-    # Main quiz area
-    if st.session_state.quiz_active:
-        if st.session_state.current_question < len(st.session_state.current_questions):
-            question = st.session_state.current_questions[st.session_state.current_question]
-            
-            # Display progress
-            progress = st.session_state.current_question / len(st.session_state.current_questions)
-            st.progress(progress)
-            
-            # Display question
-            st.subheader(f"Question {st.session_state.current_question + 1}")
-            st.write(question["question"])
-            
-            # Radio buttons for options
-            answer = st.radio("Select your answer:", question["options"], key=f"q_{st.session_state.current_question}")
-            
-            # Submit button
+    # Quiz Area
+    if st.session_state.quiz_active and st.session_state.questions:
+        # Display progress
+        progress = st.session_state.current_question / len(st.session_state.questions)
+        st.progress(progress)
+        
+        # Display current question
+        question = st.session_state.questions[st.session_state.current_question]
+        st.subheader(f"Question {st.session_state.current_question + 1}")
+        st.write(question["question"])
+        
+        # Answer selection
+        answer = st.radio(
+            "Select your answer:",
+            question["options"],
+            key=f"q_{st.session_state.current_question}"
+        )
+        
+        # Submit button
+        if not st.session_state.submitted_answer:
             if st.button("Submit Answer"):
-                is_correct = st.session_state.quiz_app.evaluate_answer(question, answer)
-                st.session_state.results.append(is_correct)
-                
-                if is_correct:
-                    st.success("Correct! 🎉")
-                else:
-                    st.error(f"Incorrect. The correct answer is: {question['correct_answer']}")
-                
-                st.session_state.current_question += 1
-                if st.session_state.current_question < len(st.session_state.current_questions):
-                    st.rerun()
-                else:
-                    # Analyze results and save them
-                    analysis = st.session_state.quiz_app.analyze_results(st.session_state.results, topic)
-                    st.session_state.progress_data[topic] = analysis
-                    
-                    # Save student result
-                    student_result = StudentQuizResult(
-                        student_name=student_name,
-                        timestamp=datetime.now(),
-                        topic=topic,
-                        accuracy=analysis['accuracy'],
-                        level=analysis['level'],
-                        correct_count=analysis['correct_count'],
-                        total_count=analysis['total_count']
-                    )
-                    st.session_state.quiz_app.save_student_result(student_result)
-                    
-                    st.session_state.quiz_active = False
-                    st.rerun()
+                submit_answer()
+        
+        # Show result and next question button
+        if st.session_state.submitted_answer:
+            is_correct = st.session_state.quiz_app.evaluate_answer(question, answer)
+            st.session_state.results.append(is_correct)
+            
+            if is_correct:
+                st.success("Correct! 🎉")
+            else:
+                st.error(f"Incorrect. The correct answer is: {question['correct_answer']}")
+            
+            # Next question or finish quiz
+            if st.session_state.current_question < len(st.session_state.questions) - 1:
+                if st.button("Next Question"):
+                    next_question()
+            else:
+                if st.button("Finish Quiz"):
+                    end_quiz(student_name)
 
-    # Display results and progress
+    # Results Display
     if not st.session_state.quiz_active and topic in st.session_state.progress_data:
         col1, col2 = st.columns(2)
         
@@ -300,7 +320,7 @@ def main():
                             labels={'Accuracy': 'Accuracy (%)'})
                 st.plotly_chart(fig)
 
-        # Display student's learning journey
+        # Learning Journey
         st.markdown("---")
         st.subheader("📈 Learning Journey")
         student_history = st.session_state.quiz_app.get_student_history(student_name)
@@ -308,14 +328,13 @@ def main():
             history_df = pd.DataFrame(student_history)
             history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
             
-            # Show progress over time
             fig = px.line(history_df, x='timestamp', y='accuracy',
                          color='topic',
                          title=f'Progress Over Time - {student_name}',
                          labels={'accuracy': 'Accuracy (%)', 'timestamp': 'Date'})
             st.plotly_chart(fig)
 
-    # Study resources
+    # Study Resources
     st.markdown("---")
     st.subheader("📚 Study Resources")
     with st.expander("Key Concepts"):
