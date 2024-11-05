@@ -7,13 +7,21 @@ from openai import OpenAI
 import os
 
 # Set up configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-NEO4J_URL = "neo4j+s://bb3b5969.databases.neo4j.io"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "YT__sW785DiB_M9BBKkWWh7XTv-23mfB05RvMgwvCAI"
+config = {
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": "neo4j+s://bb3b5969.databases.neo4j.io",
+            "username": "neo4j",
+            "password": "YT__sW785DiB_M9BBKkWWh7XTv-23mfB05RvMgwvCAI"
+        }
+    },
+    "version": "v1.1"
+}
+
+m = Memory.from_config(config_dict=config)
 
 # Initialize Memory, Educhain, and LLM instances
-m = Memory(NEO4J_URL, NEO4J_USERNAME, NEO4J_PASSWORD)
 educhain = Educhain(api_key=OPENAI_API_KEY)
 llm = OpenAI(api_key=OPENAI_API_KEY)
 
