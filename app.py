@@ -38,7 +38,7 @@ class ExpertiseLevelList(BaseModel):
 class GeometryQuizApp:
     def __init__(self):
         self.educhain = Educhain()
-        self.llm = ChatOpenAI(model="gpt-4o")
+        self.llm = ChatOpenAI(model="gpt-4")
         self.memory = Memory.from_config(config_dict={
             "graph_store": {
                 "provider": "neo4j",
@@ -167,7 +167,7 @@ def main():
                         level=current_level,
                         num_questions=num_questions
                     )
-                st.experimental_rerun()
+                st.rerun()
 
     # Main quiz area
     if st.session_state.quiz_active:
@@ -197,7 +197,7 @@ def main():
                 
                 st.session_state.current_question += 1
                 if st.session_state.current_question < len(st.session_state.current_questions):
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     # Analyze results and update memory
                     analysis = st.session_state.quiz_app.analyze_results(st.session_state.results, topic)
@@ -208,7 +208,7 @@ def main():
                         analysis['level']
                     )
                     st.session_state.quiz_active = False
-                    st.experimental_rerun()
+                    st.rerun()
 
     # Display results and progress
     if not st.session_state.quiz_active and topic in st.session_state.progress_data:
