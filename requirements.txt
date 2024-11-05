@@ -1,0 +1,7 @@
+mem0ai[graph] 
+langchain-community 
+rank-bm25 
+neo4j
+educhain
+openai
+streamlit
