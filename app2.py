@@ -1,4 +1,3 @@
-
 import streamlit as st
 import plotly.express as px
 import pandas as pd
@@ -37,7 +36,8 @@ class ExpertiseLevelList(BaseModel):
     levels: List[ExpertiseLevel] = Field(description="List of expertise levels for each topic")
 
 class GeometryQuizApp:
-    def __init__(self):
+    def __init__(self, student_name: str):
+        self.student_name = student_name
         self.educhain = Educhain()
         self.llm = ChatOpenAI(model="gpt-4")
         self.memory = Memory.from_config(config_dict={
@@ -113,16 +113,19 @@ class GeometryQuizApp:
 
     def update_memory(self, user_id: str, topic: str, level: str):
         self.memory.add(
-            f"Updated expertise level for {topic}: {level}",
+            f"{self.student_name}'s expertise level for {topic}: {level}",
             user_id=user_id
         )
 
 def main():
     st.set_page_config(page_title="GRE Geometry Master", layout="wide")
     
-    # Initialize the quiz app
+    # Get student name
+    student_name = st.text_input("Enter your name:", "Student")
+
+    # Initialize the quiz app with student name
     if 'quiz_app' not in st.session_state:
-        st.session_state.quiz_app = GeometryQuizApp()
+        st.session_state.quiz_app = GeometryQuizApp(student_name)
     
     # Initialize session state variables
     if 'current_question' not in st.session_state:
@@ -137,7 +140,7 @@ def main():
         st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
     # App title and description
-    st.title("🎯 GRE Geometry Master")
+    st.title(f"🎯 GRE Geometry Master - {st.session_state.quiz_app.student_name}")
     st.markdown("""
     Master GRE geometry concepts through adaptive quizzes powered by Educhain! 
     Track your progress and improve your expertise in:
@@ -245,33 +248,11 @@ def main():
         st.markdown("---")
         st.subheader("📊 Learning Journey")
         memory_results = st.session_state.quiz_app.memory.search(
-            f"What are my current expertise levels?",
+            f"What are {st.session_state.quiz_app.student_name}'s current expertise levels?",
             user_id=st.session_state.user_id
         )
         st.json(memory_results)
 
-    # Study resources
-    st.markdown("---")
-    st.subheader("📚 Study Resources")
-    with st.expander("Key Concepts"):
-        st.markdown("""
-        ### Lines and Angles
-        - Parallel lines and transversals
-        - Complementary and supplementary angles
-        - Angle relationships in geometric figures
-        
-        ### Circles
-        - Radius, diameter, and circumference relationships
-        - Arc length and sector area calculations
-        - Tangent and secant properties
-        - Inscribed and central angles
-        
-        ### Triangles
-        - Triangle inequality theorem
-        - Special triangles (30-60-90, 45-45-90)
-        - Area and perimeter formulas
-        - Similar and congruent triangles
-        """)
 
 if __name__ == "__main__":
     main()
