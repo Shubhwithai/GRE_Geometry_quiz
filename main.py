@@ -217,7 +217,7 @@ def main():
     
     initialize_session_state()
     
-    st.title("🎯 Mastery Learning With Mem0")
+ st.markdown("<h3>🎯 Mastery Learning with mem0 & Educhain</h3>", unsafe_allow_html=True)
     
     student_name = st.text_input("Enter Student Name", key="student_name")
     if not student_name:
