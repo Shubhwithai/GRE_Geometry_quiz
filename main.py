@@ -193,7 +193,6 @@ def next_question():
     st.session_state.submitted_answer = False
 
 # Add this function to display the quiz summary
-
 def display_quiz_summary(analysis: Dict):
     st.subheader("Quiz Summary")
     st.write(f"**Topic:** {analysis['topic']}")
@@ -289,11 +288,48 @@ def main():
                 if st.button("End Quiz"):
                     end_quiz(student_name)
 
-    if not st.session_state.quiz_active and 'progress_data' in st.session_state:
-        last_topic = st.session_state.current_topic
-        if last_topic and last_topic in st.session_state.progress_data:
-            st.write("### Quiz Results")
-            display_quiz_summary(st.session_state.progress_data[last_topic])
+    # Results Display
+    if not st.session_state.quiz_active and st.session_state.progress_data:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader(f"Latest Quiz Results for {student_name}")
+            if st.session_state.current_topic in st.session_state.progress_data:
+                analysis = st.session_state.progress_data[st.session_state.current_topic]
+                st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
+                st.metric("Level", analysis['level'])
+                st.write(f"**Reasoning:** {analysis['reasoning']}")
+
+        with col2:
+            st.subheader("Progress Visualization")
+            if st.session_state.progress_data:
+                df = pd.DataFrame([
+                    {
+                        'Topic': t,
+                        'Accuracy': data['accuracy'],
+                        'Level': data['level']
+                    }
+                    for t, data in st.session_state.progress_data.items()
+                ])
+                
+                fig = px.bar(df, x='Topic', y='Accuracy',
+                             color='Level',
+                             title=f'Performance by Topic - {student_name}',
+                             labels={'Accuracy': 'Accuracy (%)'})
+                st.plotly_chart(fig)
+
+        # Learning Journey
+        st.markdown("---")
+        st.subheader("📈 Learning Journey")
+        if student_history:
+            history_df = pd.DataFrame(student_history)
+            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
+            
+            fig = px.line(history_df, x='timestamp', y='accuracy',
+                          color='topic',
+                          title=f'Progress Over Time - {student_name}',
+                          labels={'accuracy': 'Accuracy (%)', 'timestamp': 'Date'})
+            st.plotly_chart(fig)
 
 if __name__ == "__main__":
     main()
