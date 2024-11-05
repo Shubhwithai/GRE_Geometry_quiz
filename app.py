@@ -47,7 +47,7 @@ class StudentQuizResult(BaseModel):
 class GeometryQuizApp:
     def __init__(self):
         self.educhain = Educhain()
-        self.llm = ChatOpenAI(model="gpt-4")
+        self.llm = ChatOpenAI(model="gpt-4o")
         self.memory = Memory.from_config(config_dict={
             "graph_store": {
                 "provider": "neo4j",
