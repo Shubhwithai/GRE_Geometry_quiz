@@ -193,6 +193,7 @@ def next_question():
     st.session_state.submitted_answer = False
 
 # Add this function to display the quiz summary
+
 def display_quiz_summary(analysis: Dict):
     st.subheader("Quiz Summary")
     st.write(f"**Topic:** {analysis['topic']}")
@@ -203,15 +204,12 @@ def display_quiz_summary(analysis: Dict):
 
 def end_quiz(student_name: str):
     """End the quiz and save results, then display summary"""
-    # Analyze results for the current topic
     analysis = st.session_state.quiz_app.analyze_results(
         st.session_state.results, 
         st.session_state.current_topic
     )
-    # Save the analysis data
     st.session_state.progress_data[st.session_state.current_topic] = analysis
-
-    # Create and save student result
+    
     student_result = StudentQuizResult(
         student_name=student_name,
         timestamp=datetime.now(),
@@ -223,13 +221,9 @@ def end_quiz(student_name: str):
     )
     st.session_state.quiz_app.save_student_result(student_result)
     
-    # Set quiz as inactive
     st.session_state.quiz_active = False
     
-    # Display the quiz summary
     display_quiz_summary(analysis)
-
-# Main function setup remains the same, only modified here for quiz summary at end
 
 def main():
     st.set_page_config(page_title="Newton's Laws Mastery", layout="wide")
@@ -251,37 +245,31 @@ def main():
     - Newton's 3rd Law
     """)
 
-    # Sidebar
     with st.sidebar:
         st.header("Quiz Controls")
         topic = st.selectbox("Select Topic", ["Newton's 1st Law", "Newton's 2nd Law", "Newton's 3rd Law"])
         
-        # Display student's previous results
         st.subheader("Previous Results")
         student_history = st.session_state.quiz_app.get_student_history(student_name)
         if student_history:
             history_df = pd.DataFrame(student_history)
             history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
-            st.line_chart(history_df.set_index('timestamp')['accuracy'])
+            st.line_chart(history_df.set_index('timestamp')['accuracy'])  # Plot accuracy over time
         
         if not st.session_state.quiz_active:
             num_questions = st.slider("Number of Questions", 3, 10, 5)
             if st.button("Start Quiz"):
                 start_quiz(topic, num_questions)
 
-    # Quiz Area
     if st.session_state.quiz_active and st.session_state.questions:
-        # Display progress
         progress = st.session_state.current_question / len(st.session_state.questions)
         st.progress(progress)
         
-        # Display current question
         question = st.session_state.questions[st.session_state.current_question]
         st.write(f"Question {st.session_state.current_question + 1}: {question['question']}")
         options = question['options']
         selected_option = st.radio("Choose an answer", options, key="selected_answer")
         
-        # Submit answer
         if not st.session_state.submitted_answer:
             if st.button("Submit Answer"):
                 is_correct = st.session_state.quiz_app.evaluate_answer(question, selected_option)
@@ -290,7 +278,6 @@ def main():
                 submit_answer()
         
         if st.session_state.submitted_answer:
-            # Display result
             if st.session_state.results[-1]:
                 st.success("Correct!")
             else:
@@ -300,9 +287,8 @@ def main():
                     next_question()
             else:
                 if st.button("End Quiz"):
-                    end_quiz(student_name)  # End quiz and show results
+                    end_quiz(student_name)
 
-    # Display the summary if the quiz has ended
     if not st.session_state.quiz_active and 'progress_data' in st.session_state:
         last_topic = st.session_state.current_topic
         if last_topic and last_topic in st.session_state.progress_data:
