@@ -35,6 +35,15 @@ class ExpertiseLevel(BaseModel):
 class ExpertiseLevelList(BaseModel):
     levels: List[ExpertiseLevel] = Field(description="List of expertise levels for each topic")
 
+class StudentQuizResult(BaseModel):
+    student_name: str
+    timestamp: datetime
+    topic: str
+    accuracy: float
+    level: str
+    correct_count: int
+    total_count: int
+
 class GeometryQuizApp:
     def __init__(self):
         self.educhain = Educhain()
@@ -50,9 +59,12 @@ class GeometryQuizApp:
             },
             "version": "v1.1"
         })
+        
+        # Initialize results storage
+        if not os.path.exists('student_results'):
+            os.makedirs('student_results')
 
     def generate_questions(self, topic: str, level: str, num_questions: int = 5) -> List[Dict]:
-        # Create custom instructions based on level and topic
         instructions = f"""
         Generate {num_questions} multiple-choice questions for GRE Geometry.
         Topic: {topic}
@@ -65,14 +77,12 @@ class GeometryQuizApp:
         - Provide clear and unambiguous correct answers
         """
         
-        # Generate questions using Educhain
         questions = self.educhain.qna_engine.generate_questions(
             topic=f"GRE Geometry - {topic}",
             num=num_questions,
             custom_instructions=instructions
         )
         
-        # Format questions for our app
         formatted_questions = []
         for q in questions.questions:
             formatted_questions.append({
@@ -110,6 +120,38 @@ class GeometryQuizApp:
             "reasoning": reasoning
         }
 
+    def save_student_result(self, result: StudentQuizResult):
+        filename = f"student_results/{result.student_name.lower().replace(' ', '_')}_results.json"
+        
+        # Load existing results
+        existing_results = []
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                existing_results = json.load(f)
+        
+        # Add new result
+        new_result = {
+            "student_name": result.student_name,
+            "timestamp": result.timestamp.isoformat(),
+            "topic": result.topic,
+            "accuracy": result.accuracy,
+            "level": result.level,
+            "correct_count": result.correct_count,
+            "total_count": result.total_count
+        }
+        existing_results.append(new_result)
+        
+        # Save updated results
+        with open(filename, 'w') as f:
+            json.dump(existing_results, f, indent=2)
+
+    def get_student_history(self, student_name: str) -> List[Dict]:
+        filename = f"student_results/{student_name.lower().replace(' ', '_')}_results.json"
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                return json.load(f)
+        return []
+
     def update_memory(self, user_id: str, topic: str, level: str):
         self.memory.add(
             f"Updated expertise level for {topic}: {level}",
@@ -132,11 +174,16 @@ def main():
         st.session_state.quiz_active = False
     if 'progress_data' not in st.session_state:
         st.session_state.progress_data = {}
-    if 'user_id' not in st.session_state:
-        st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
+    
     # App title and description
     st.title("🎯 GRE Geometry Master")
+    
+    # Add student name input
+    student_name = st.text_input("Enter Student Name", key="student_name")
+    if not student_name:
+        st.warning("Please enter your name to begin")
+        return
+    
     st.markdown("""
     Master GRE geometry concepts through adaptive quizzes powered by Educhain! 
     Track your progress and improve your expertise in:
@@ -150,6 +197,14 @@ def main():
         st.header("Quiz Controls")
         topic = st.selectbox("Select Topic", ["Lines and Angles", "Circles", "Triangles"])
         
+        # Display student's previous results
+        st.subheader("Previous Results")
+        student_history = st.session_state.quiz_app.get_student_history(student_name)
+        if student_history:
+            history_df = pd.DataFrame(student_history)
+            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
+            st.line_chart(history_df.set_index('timestamp')['accuracy'])
+        
         if not st.session_state.quiz_active:
             num_questions = st.slider("Number of Questions", 3, 10, 5)
             if st.button("Start Quiz"):
@@ -157,10 +212,8 @@ def main():
                 st.session_state.current_question = 0
                 st.session_state.results = []
                 
-                # Get current level from progress data or default to Beginner
                 current_level = st.session_state.progress_data.get(topic, {}).get('level', 'Beginner')
                 
-                # Generate questions using Educhain
                 with st.spinner("Generating questions..."):
                     st.session_state.current_questions = st.session_state.quiz_app.generate_questions(
                         topic=topic,
@@ -199,14 +252,22 @@ def main():
                 if st.session_state.current_question < len(st.session_state.current_questions):
                     st.rerun()
                 else:
-                    # Analyze results and update memory
+                    # Analyze results and save them
                     analysis = st.session_state.quiz_app.analyze_results(st.session_state.results, topic)
                     st.session_state.progress_data[topic] = analysis
-                    st.session_state.quiz_app.update_memory(
-                        st.session_state.user_id,
-                        topic,
-                        analysis['level']
+                    
+                    # Save student result
+                    student_result = StudentQuizResult(
+                        student_name=student_name,
+                        timestamp=datetime.now(),
+                        topic=topic,
+                        accuracy=analysis['accuracy'],
+                        level=analysis['level'],
+                        correct_count=analysis['correct_count'],
+                        total_count=analysis['total_count']
                     )
+                    st.session_state.quiz_app.save_student_result(student_result)
+                    
                     st.session_state.quiz_active = False
                     st.rerun()
 
@@ -215,7 +276,7 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Latest Quiz Results")
+            st.subheader(f"Latest Quiz Results for {student_name}")
             analysis = st.session_state.progress_data[topic]
             st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
             st.metric("Level", analysis['level'])
@@ -235,19 +296,24 @@ def main():
                 
                 fig = px.bar(df, x='Topic', y='Accuracy',
                             color='Level',
-                            title='Performance by Topic',
+                            title=f'Performance by Topic - {student_name}',
                             labels={'Accuracy': 'Accuracy (%)'})
                 st.plotly_chart(fig)
 
-    # Memory Overview
-    if st.session_state.progress_data:
+        # Display student's learning journey
         st.markdown("---")
-        st.subheader("📊 Learning Journey")
-        memory_results = st.session_state.quiz_app.memory.search(
-            f"What are my current expertise levels?",
-            user_id=st.session_state.user_id
-        )
-        st.json(memory_results)
+        st.subheader("📈 Learning Journey")
+        student_history = st.session_state.quiz_app.get_student_history(student_name)
+        if student_history:
+            history_df = pd.DataFrame(student_history)
+            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
+            
+            # Show progress over time
+            fig = px.line(history_df, x='timestamp', y='accuracy',
+                         color='topic',
+                         title=f'Progress Over Time - {student_name}',
+                         labels={'accuracy': 'Accuracy (%)', 'timestamp': 'Date'})
+            st.plotly_chart(fig)
 
     # Study resources
     st.markdown("---")
