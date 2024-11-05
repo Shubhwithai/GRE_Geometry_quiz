@@ -225,7 +225,7 @@ def main():
         return
     
     st.markdown("""
-    Master GRE geometry concepts through adaptive quizzes powered by Educhain With Mem0! 
+    Master GRE geometry concepts through adaptive quizzes powered by Educhain With Mem0!
     Track your progress and improve your expertise in:
     - Lines and Angles
     - Circles
