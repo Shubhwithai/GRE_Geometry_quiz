@@ -52,9 +52,9 @@ class GeometryQuizApp:
             "graph_store": {
                 "provider": "neo4j",
                 "config": {
-                    "url": "neo4j+s://c6059d7b.databases.neo4j.io",
+                    "url": "neo4j+s://bb3b5969.databases.neo4j.io",
                     "username": "neo4j",
-                    "password": "OOn7tXNU9_0AzyjRxUtu5ABwTrptg4A62bfgRZ77pNQ"
+                    "password": "YT__sW785DiB_M9BBKkWWh7XTv-23mfB05RvMgwvCAI"
                 }
             },
             "version": "v1.1"
