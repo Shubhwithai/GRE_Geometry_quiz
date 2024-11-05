@@ -5,3 +5,7 @@ neo4j
 educhain
 openai
 streamlit
+plotly 
+pandas 
+langchain-openai 
+pydantic 
