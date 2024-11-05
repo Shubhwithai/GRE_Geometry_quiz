@@ -22,7 +22,7 @@ config = {
 # Initialize Memory, Educhain, and LLM instances
 m = Memory.from_config(config_dict=config)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-educhain = Educhain(api_key=OPENAI_API_KEY)
+educhain = Educhain()
 llm = OpenAI(api_key=OPENAI_API_KEY)
 
 # Pydantic models for structured data handling
