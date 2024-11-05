@@ -18,14 +18,14 @@ class QuizResult(BaseModel):
     result: str  # "correct" or "incorrect"
 
 class TopicAnalysis(BaseModel):
-    topic_category: str = Field(description="Specific geometry topic (Lines/Angles, Circles, or Triangles)")
+    topic_category: str = Field(description="Specific Newton's Law topic (1st, 2nd, or 3rd Law)")
     questions: List[QuizResult]
     correct_count: int
     total_count: int
     accuracy: float = Field(description="Percentage of correct answers")
 
 class TopicAnalysisList(BaseModel):
-    analyses: List[TopicAnalysis] = Field(description="List of analyses for each geometry topic")
+    analyses: List[TopicAnalysis] = Field(description="List of analyses for each Newton's Law topic")
 
 class ExpertiseLevel(BaseModel):
     topic: str
@@ -44,7 +44,7 @@ class StudentQuizResult(BaseModel):
     correct_count: int
     total_count: int
 
-class GeometryQuizApp:
+class NewtonsLawQuizApp:
     def __init__(self):
         self.educhain = Educhain()
         self.llm = ChatOpenAI(model="gpt-4o")
@@ -66,19 +66,19 @@ class GeometryQuizApp:
 
     def generate_questions(self, topic: str, level: str, num_questions: int = 5) -> List[Dict]:
         instructions = f"""
-        Generate {num_questions} multiple-choice questions for GRE Geometry.
+        Generate {num_questions} multiple-choice questions on Newton's Laws of Motion.
         Topic: {topic}
         Level: {level}
         
         Requirements:
         - Questions should be {level.lower()} level
         - Include 4 options for each question
-        - Focus on core GRE geometry concepts
+        - Focus on core concepts of Newton's laws
         - Provide clear and unambiguous correct answers
         """
         
         questions = self.educhain.qna_engine.generate_questions(
-            topic=f"GRE Geometry - {topic}",
+            topic=f"Newton's Laws - {topic}",
             num=num_questions,
             custom_instructions=instructions
         )
@@ -152,7 +152,7 @@ class GeometryQuizApp:
 def initialize_session_state():
     """Initialize all session state variables"""
     if 'quiz_app' not in st.session_state:
-        st.session_state.quiz_app = GeometryQuizApp()
+        st.session_state.quiz_app = NewtonsLawQuizApp()
     if 'current_question' not in st.session_state:
         st.session_state.current_question = 0
     if 'questions' not in st.session_state:
@@ -213,7 +213,7 @@ def end_quiz(student_name: str):
     st.session_state.quiz_active = False
 
 def main():
-    st.set_page_config(page_title="GRE Geometry Master", layout="wide")
+    st.set_page_config(page_title="Newton's Laws Mastery", layout="wide")
     
     initialize_session_state()
     
@@ -225,17 +225,17 @@ def main():
         return
     
     st.markdown("""
-    Master GRE geometry concepts through adaptive quizzes powered by Educhain With Mem0!
+    Master Newton's Laws concepts through adaptive quizzes powered by Educhain With Mem0!
     Track your progress and improve your expertise in:
-    - Lines and Angles
-    - Circles
-    - Triangles
+    - Newton's 1st Law
+    - Newton's 2nd Law
+    - Newton's 3rd Law
     """)
 
     # Sidebar
     with st.sidebar:
         st.header("Quiz Controls")
-        topic = st.selectbox("Select Topic", ["Lines and Angles", "Circles", "Triangles"])
+        topic = st.selectbox("Select Topic", ["Newton's 1st Law", "Newton's 2nd Law", "Newton's 3rd Law"])
         
         # Display student's previous results
         st.subheader("Previous Results")
@@ -258,105 +258,31 @@ def main():
         
         # Display current question
         question = st.session_state.questions[st.session_state.current_question]
-        st.subheader(f"Question {st.session_state.current_question + 1}")
-        st.write(question["question"])
+        st.write(f"Question {st.session_state.current_question + 1}: {question['question']}")
+        options = question['options']
+        selected_option = st.radio("Choose an answer", options, key="selected_answer")
         
-        # Answer selection
-        answer = st.radio(
-            "Select your answer:",
-            question["options"],
-            key=f"q_{st.session_state.current_question}"
-        )
-        
-        # Submit button
+        # Submit answer
         if not st.session_state.submitted_answer:
             if st.button("Submit Answer"):
+                is_correct = st.session_state.quiz_app.evaluate_answer(question, selected_option)
+                result = QuizResult(question=question['question'], result="correct" if is_correct else "incorrect")
+                st.session_state.results.append(result.result == "correct")
                 submit_answer()
         
-        # Show result and next question button
         if st.session_state.submitted_answer:
-            is_correct = st.session_state.quiz_app.evaluate_answer(question, answer)
-            st.session_state.results.append(is_correct)
-            
-            if is_correct:
-                st.success("Correct! 🎉")
+            # Display result
+            if st.session_state.results[-1]:
+                st.success("Correct!")
             else:
-                st.error(f"Incorrect. The correct answer is: {question['correct_answer']}")
-            
-            # Next question or finish quiz
+                st.error("Incorrect!")
             if st.session_state.current_question < len(st.session_state.questions) - 1:
                 if st.button("Next Question"):
                     next_question()
             else:
-                if st.button("Finish Quiz"):
+                if st.button("End Quiz"):
                     end_quiz(student_name)
-
-    # Results Display
-    if not st.session_state.quiz_active and st.session_state.progress_data:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader(f"Latest Quiz Results for {student_name}")
-            if st.session_state.current_topic in st.session_state.progress_data:
-                analysis = st.session_state.progress_data[st.session_state.current_topic]
-                st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
-                st.metric("Level", analysis['level'])
-                st.write(f"**Reasoning:** {analysis['reasoning']}")
-
-        with col2:
-            st.subheader("Progress Visualization")
-            if st.session_state.progress_data:
-                df = pd.DataFrame([
-                    {
-                        'Topic': t,
-                        'Accuracy': data['accuracy'],
-                        'Level': data['level']
-                    }
-                    for t, data in st.session_state.progress_data.items()
-                ])
-                
-                fig = px.bar(df, x='Topic', y='Accuracy',
-                            color='Level',
-                            title=f'Performance by Topic - {student_name}',
-                            labels={'Accuracy': 'Accuracy (%)'})
-                st.plotly_chart(fig)
-
-        # Learning Journey
-        st.markdown("---")
-        st.subheader("📈 Learning Journey")
-        student_history = st.session_state.quiz_app.get_student_history(student_name)
-        if student_history:
-            history_df = pd.DataFrame(student_history)
-            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
-            
-            fig = px.line(history_df, x='timestamp', y='accuracy',
-                         color='topic',
-                         title=f'Progress Over Time - {student_name}',
-                         labels={'accuracy': 'Accuracy (%)', 'timestamp': 'Date'})
-            st.plotly_chart(fig)
-
-    # Study Resources
-    st.markdown("---")
-    st.subheader("📚 Study Resources")
-    with st.expander("Key Concepts"):
-        st.markdown("""
-        ### Lines and Angles
-        - Parallel lines and transversals
-        - Complementary and supplementary angles
-        - Angle relationships in geometric figures
-        
-        ### Circles
-        - Radius, diameter, and circumference relationships
-        - Arc length and sector area calculations
-        - Tangent and secant properties
-        - Inscribed and central angles
-        
-        ### Triangles
-        - Triangle inequality theorem
-        - Special triangles (30-60-90, 45-45-90)
-        - Area and perimeter formulas
-        - Similar and congruent triangles
-        """)
+                    st.success("Quiz Completed! Check your progress on the sidebar.")
 
 if __name__ == "__main__":
     main()
