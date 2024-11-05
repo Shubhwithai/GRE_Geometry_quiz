@@ -217,7 +217,7 @@ def main():
     
     initialize_session_state()
     
-    st.title("🎯 GRE Geometry Master")
+    st.title("🎯 Mastery Learning With Mem0")
     
     student_name = st.text_input("Enter Student Name", key="student_name")
     if not student_name:
@@ -225,7 +225,7 @@ def main():
         return
     
     st.markdown("""
-    Master GRE geometry concepts through adaptive quizzes powered by Educhain! 
+    Master GRE geometry concepts through adaptive quizzes powered by Educhain With Mem0! 
     Track your progress and improve your expertise in:
     - Lines and Angles
     - Circles
