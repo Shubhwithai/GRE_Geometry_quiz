@@ -35,19 +35,11 @@ class ExpertiseLevel(BaseModel):
 class ExpertiseLevelList(BaseModel):
     levels: List[ExpertiseLevel] = Field(description="List of expertise levels for each topic")
 
-class StudentQuizResult(BaseModel):
-    student_name: str
-    timestamp: datetime
-    topic: str
-    accuracy: float
-    level: str
-    correct_count: int
-    total_count: int
-
 class GeometryQuizApp:
-    def __init__(self):
+    def __init__(self, student_name: str):
+        self.student_name = student_name
         self.educhain = Educhain()
-        self.llm = ChatOpenAI(model="gpt-4o")
+        self.llm = ChatOpenAI(model="gpt-4")
         self.memory = Memory.from_config(config_dict={
             "graph_store": {
                 "provider": "neo4j",
@@ -59,12 +51,9 @@ class GeometryQuizApp:
             },
             "version": "v1.1"
         })
-        
-        # Initialize results storage
-        if not os.path.exists('student_results'):
-            os.makedirs('student_results')
 
     def generate_questions(self, topic: str, level: str, num_questions: int = 5) -> List[Dict]:
+        # Create custom instructions based on level and topic
         instructions = f"""
         Generate {num_questions} multiple-choice questions for GRE Geometry.
         Topic: {topic}
@@ -77,12 +66,14 @@ class GeometryQuizApp:
         - Provide clear and unambiguous correct answers
         """
         
+        # Generate questions using Educhain
         questions = self.educhain.qna_engine.generate_questions(
             topic=f"GRE Geometry - {topic}",
             num=num_questions,
             custom_instructions=instructions
         )
         
+        # Format questions for our app
         formatted_questions = []
         for q in questions.questions:
             formatted_questions.append({
@@ -120,110 +111,36 @@ class GeometryQuizApp:
             "reasoning": reasoning
         }
 
-    def save_student_result(self, result: StudentQuizResult):
-        filename = f"student_results/{result.student_name.lower().replace(' ', '_')}_results.json"
-        
-        existing_results = []
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                existing_results = json.load(f)
-        
-        new_result = {
-            "student_name": result.student_name,
-            "timestamp": result.timestamp.isoformat(),
-            "topic": result.topic,
-            "accuracy": result.accuracy,
-            "level": result.level,
-            "correct_count": result.correct_count,
-            "total_count": result.total_count
-        }
-        existing_results.append(new_result)
-        
-        with open(filename, 'w') as f:
-            json.dump(existing_results, f, indent=2)
+    def update_memory(self, user_id: str, topic: str, level: str):
+        self.memory.add(
+            f"{self.student_name}'s expertise level for {topic}: {level}",
+            user_id=user_id
+        )
 
-    def get_student_history(self, student_name: str) -> List[Dict]:
-        filename = f"student_results/{student_name.lower().replace(' ', '_')}_results.json"
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                return json.load(f)
-        return []
+def main():
+    st.set_page_config(page_title="GRE Geometry Master", layout="wide")
+    
+    # Get student name
+    student_name = st.text_input("Enter your name:", "Student")
 
-def initialize_session_state():
-    """Initialize all session state variables"""
+    # Initialize the quiz app with student name
     if 'quiz_app' not in st.session_state:
-        st.session_state.quiz_app = GeometryQuizApp()
+        st.session_state.quiz_app = GeometryQuizApp(student_name)
+    
+    # Initialize session state variables
     if 'current_question' not in st.session_state:
         st.session_state.current_question = 0
-    if 'questions' not in st.session_state:
-        st.session_state.questions = None
     if 'results' not in st.session_state:
         st.session_state.results = []
     if 'quiz_active' not in st.session_state:
         st.session_state.quiz_active = False
     if 'progress_data' not in st.session_state:
         st.session_state.progress_data = {}
-    if 'current_topic' not in st.session_state:
-        st.session_state.current_topic = None
-    if 'submitted_answer' not in st.session_state:
-        st.session_state.submitted_answer = False
+    if 'user_id' not in st.session_state:
+        st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-def start_quiz(topic: str, num_questions: int):
-    """Start a new quiz"""
-    st.session_state.quiz_active = True
-    st.session_state.current_question = 0
-    st.session_state.results = []
-    st.session_state.current_topic = topic
-    st.session_state.submitted_answer = False
-    
-    current_level = st.session_state.progress_data.get(topic, {}).get('level', 'Beginner')
-    st.session_state.questions = st.session_state.quiz_app.generate_questions(
-        topic=topic,
-        level=current_level,
-        num_questions=num_questions
-    )
-
-def submit_answer():
-    """Handle answer submission"""
-    st.session_state.submitted_answer = True
-
-def next_question():
-    """Move to next question"""
-    st.session_state.current_question += 1
-    st.session_state.submitted_answer = False
-
-def end_quiz(student_name: str):
-    """End the quiz and save results"""
-    analysis = st.session_state.quiz_app.analyze_results(
-        st.session_state.results, 
-        st.session_state.current_topic
-    )
-    st.session_state.progress_data[st.session_state.current_topic] = analysis
-    
-    student_result = StudentQuizResult(
-        student_name=student_name,
-        timestamp=datetime.now(),
-        topic=st.session_state.current_topic,
-        accuracy=analysis['accuracy'],
-        level=analysis['level'],
-        correct_count=analysis['correct_count'],
-        total_count=analysis['total_count']
-    )
-    st.session_state.quiz_app.save_student_result(student_result)
-    st.session_state.quiz_active = False
-
-def main():
-    st.set_page_config(page_title="GRE Geometry Master", layout="wide")
-    
-    initialize_session_state()
-    
-    st.title("🎯 GRE Geometry Master")
-    
-    student_name = st.text_input("Enter Student Name", key="student_name")
-    if not student_name:
-        st.warning("Please enter your name to begin")
-        return
-    
+    # App title and description
+    st.title(f"🎯 GRE Geometry Master - {st.session_state.quiz_app.student_name}")
     st.markdown("""
     Master GRE geometry concepts through adaptive quizzes powered by Educhain! 
     Track your progress and improve your expertise in:
@@ -232,71 +149,77 @@ def main():
     - Triangles
     """)
 
-    # Sidebar
+    # Sidebar for topic selection and quiz control
     with st.sidebar:
         st.header("Quiz Controls")
         topic = st.selectbox("Select Topic", ["Lines and Angles", "Circles", "Triangles"])
         
-        # Display student's previous results
-        st.subheader("Previous Results")
-        student_history = st.session_state.quiz_app.get_student_history(student_name)
-        if student_history:
-            history_df = pd.DataFrame(student_history)
-            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
-            st.line_chart(history_df.set_index('timestamp')['accuracy'])
-        
         if not st.session_state.quiz_active:
             num_questions = st.slider("Number of Questions", 3, 10, 5)
             if st.button("Start Quiz"):
-                start_quiz(topic, num_questions)
+                st.session_state.quiz_active = True
+                st.session_state.current_question = 0
+                st.session_state.results = []
+                
+                # Get current level from progress data or default to Beginner
+                current_level = st.session_state.progress_data.get(topic, {}).get('level', 'Beginner')
+                
+                # Generate questions using Educhain
+                with st.spinner("Generating questions..."):
+                    st.session_state.current_questions = st.session_state.quiz_app.generate_questions(
+                        topic=topic,
+                        level=current_level,
+                        num_questions=num_questions
+                    )
+                st.rerun()
 
-    # Quiz Area
-    if st.session_state.quiz_active and st.session_state.questions:
-        # Display progress
-        progress = st.session_state.current_question / len(st.session_state.questions)
-        st.progress(progress)
-        
-        # Display current question
-        question = st.session_state.questions[st.session_state.current_question]
-        st.subheader(f"Question {st.session_state.current_question + 1}")
-        st.write(question["question"])
-        
-        # Answer selection
-        answer = st.radio(
-            "Select your answer:",
-            question["options"],
-            key=f"q_{st.session_state.current_question}"
-        )
-        
-        # Submit button
-        if not st.session_state.submitted_answer:
+    # Main quiz area
+    if st.session_state.quiz_active:
+        if st.session_state.current_question < len(st.session_state.current_questions):
+            question = st.session_state.current_questions[st.session_state.current_question]
+            
+            # Display progress
+            progress = st.session_state.current_question / len(st.session_state.current_questions)
+            st.progress(progress)
+            
+            # Display question
+            st.subheader(f"Question {st.session_state.current_question + 1}")
+            st.write(question["question"])
+            
+            # Radio buttons for options
+            answer = st.radio("Select your answer:", question["options"], key=f"q_{st.session_state.current_question}")
+            
+            # Submit button
             if st.button("Submit Answer"):
-                submit_answer()
-        
-        # Show result and next question button
-        if st.session_state.submitted_answer:
-            is_correct = st.session_state.quiz_app.evaluate_answer(question, answer)
-            st.session_state.results.append(is_correct)
-            
-            if is_correct:
-                st.success("Correct! 🎉")
-            else:
-                st.error(f"Incorrect. The correct answer is: {question['correct_answer']}")
-            
-            # Next question or finish quiz
-            if st.session_state.current_question < len(st.session_state.questions) - 1:
-                if st.button("Next Question"):
-                    next_question()
-            else:
-                if st.button("Finish Quiz"):
-                    end_quiz(student_name)
+                is_correct = st.session_state.quiz_app.evaluate_answer(question, answer)
+                st.session_state.results.append(is_correct)
+                
+                if is_correct:
+                    st.success("Correct! 🎉")
+                else:
+                    st.error(f"Incorrect. The correct answer is: {question['correct_answer']}")
+                
+                st.session_state.current_question += 1
+                if st.session_state.current_question < len(st.session_state.current_questions):
+                    st.rerun()
+                else:
+                    # Analyze results and update memory
+                    analysis = st.session_state.quiz_app.analyze_results(st.session_state.results, topic)
+                    st.session_state.progress_data[topic] = analysis
+                    st.session_state.quiz_app.update_memory(
+                        st.session_state.user_id,
+                        topic,
+                        analysis['level']
+                    )
+                    st.session_state.quiz_active = False
+                    st.rerun()
 
-    # Results Display
+    # Display results and progress
     if not st.session_state.quiz_active and topic in st.session_state.progress_data:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader(f"Latest Quiz Results for {student_name}")
+            st.subheader("Latest Quiz Results")
             analysis = st.session_state.progress_data[topic]
             st.metric("Accuracy", f"{analysis['accuracy']:.1f}%")
             st.metric("Level", analysis['level'])
@@ -316,46 +239,20 @@ def main():
                 
                 fig = px.bar(df, x='Topic', y='Accuracy',
                             color='Level',
-                            title=f'Performance by Topic - {student_name}',
+                            title='Performance by Topic',
                             labels={'Accuracy': 'Accuracy (%)'})
                 st.plotly_chart(fig)
 
-        # Learning Journey
+    # Memory Overview
+    if st.session_state.progress_data:
         st.markdown("---")
-        st.subheader("📈 Learning Journey")
-        student_history = st.session_state.quiz_app.get_student_history(student_name)
-        if student_history:
-            history_df = pd.DataFrame(student_history)
-            history_df['timestamp'] = pd.to_datetime(history_df['timestamp'])
-            
-            fig = px.line(history_df, x='timestamp', y='accuracy',
-                         color='topic',
-                         title=f'Progress Over Time - {student_name}',
-                         labels={'accuracy': 'Accuracy (%)', 'timestamp': 'Date'})
-            st.plotly_chart(fig)
+        st.subheader("📊 Learning Journey")
+        memory_results = st.session_state.quiz_app.memory.search(
+            f"What are {st.session_state.quiz_app.student_name}'s current expertise levels?",
+            user_id=st.session_state.user_id
+        )
+        st.json(memory_results)
 
-    # Study Resources
-    st.markdown("---")
-    st.subheader("📚 Study Resources")
-    with st.expander("Key Concepts"):
-        st.markdown("""
-        ### Lines and Angles
-        - Parallel lines and transversals
-        - Complementary and supplementary angles
-        - Angle relationships in geometric figures
-        
-        ### Circles
-        - Radius, diameter, and circumference relationships
-        - Arc length and sector area calculations
-        - Tangent and secant properties
-        - Inscribed and central angles
-        
-        ### Triangles
-        - Triangle inequality theorem
-        - Special triangles (30-60-90, 45-45-90)
-        - Area and perimeter formulas
-        - Similar and congruent triangles
-        """)
 
 if __name__ == "__main__":
     main()
