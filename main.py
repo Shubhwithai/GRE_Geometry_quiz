@@ -192,14 +192,26 @@ def next_question():
     st.session_state.current_question += 1
     st.session_state.submitted_answer = False
 
+# Add this function to display the quiz summary
+def display_quiz_summary(analysis: Dict):
+    st.subheader("Quiz Summary")
+    st.write(f"**Topic:** {analysis['topic']}")
+    st.write(f"**Correct Answers:** {analysis['correct_count']} out of {analysis['total_count']}")
+    st.write(f"**Accuracy:** {analysis['accuracy']}%")
+    st.write(f"**Expertise Level:** {analysis['level']}")
+    st.write(f"**Reasoning:** {analysis['reasoning']}")
+
 def end_quiz(student_name: str):
-    """End the quiz and save results"""
+    """End the quiz and save results, then display summary"""
+    # Analyze results for the current topic
     analysis = st.session_state.quiz_app.analyze_results(
         st.session_state.results, 
         st.session_state.current_topic
     )
+    # Save the analysis data
     st.session_state.progress_data[st.session_state.current_topic] = analysis
-    
+
+    # Create and save student result
     student_result = StudentQuizResult(
         student_name=student_name,
         timestamp=datetime.now(),
@@ -210,7 +222,14 @@ def end_quiz(student_name: str):
         total_count=analysis['total_count']
     )
     st.session_state.quiz_app.save_student_result(student_result)
+    
+    # Set quiz as inactive
     st.session_state.quiz_active = False
+    
+    # Display the quiz summary
+    display_quiz_summary(analysis)
+
+# Main function setup remains the same, only modified here for quiz summary at end
 
 def main():
     st.set_page_config(page_title="Newton's Laws Mastery", layout="wide")
@@ -281,8 +300,14 @@ def main():
                     next_question()
             else:
                 if st.button("End Quiz"):
-                    end_quiz(student_name)
-                    st.success("Quiz Completed! Check your progress on the sidebar.")
+                    end_quiz(student_name)  # End quiz and show results
+
+    # Display the summary if the quiz has ended
+    if not st.session_state.quiz_active and 'progress_data' in st.session_state:
+        last_topic = st.session_state.current_topic
+        if last_topic and last_topic in st.session_state.progress_data:
+            st.write("### Quiz Results")
+            display_quiz_summary(st.session_state.progress_data[last_topic])
 
 if __name__ == "__main__":
     main()
